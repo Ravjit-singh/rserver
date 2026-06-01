@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NexaPanel - Remote Access</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .view-panel { display: none; }
+        .view-panel.active { display: flex; }
+    </style>
+</head>
+<body class="text-slate-100 h-screen w-full flex flex-col md:flex-row overflow-hidden bg-[#0f1422]">
+
+    <!-- CONNECTION MODAL -->
+    <div id="connectionModal" class="fixed inset-0 bg-[#0b0f19]/95 backdrop-blur-md z-[200] flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full flex flex-col gap-4">
+            <div class="flex justify-center mb-2">
+                <div class="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <svg class="w-8 h-8 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M10 21l2-1 2 1m-2-1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg>
+                </div>
+            </div>
+            <div class="text-center">
+                <h2 class="text-2xl font-bold tracking-tight text-white mb-1">Connect Node</h2>
+                <p class="text-xs text-slate-400">Enter your secure Localtunnel URL to connect to your phone's Bedrock server.</p>
+            </div>
+            <div class="mt-2">
+                <input type="url" id="tunnelUrlInput" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-emerald-500 text-slate-200 placeholder-slate-700" placeholder="https://xxxx-xxxx.loca.lt">
+            </div>
+            <button onclick="initConnection()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20 mt-2">Establish Link</button>
+            <button onclick="clearSavedUrl()" class="text-xs text-slate-500 hover:text-red-400 mt-2 transition">Clear Saved Data</button>
+        </div>
+    </div>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col shrink-0 z-20">
+        <div class="p-4 md:p-5 border-b border-slate-800 flex items-center gap-3 shrink-0">
+            <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
+                <svg class="w-5 h-5 text-slate-900 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M10 21l2-1 2 1m-2-1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg>
+            </div>
+            <div>
+                <h1 class="font-bold text-base tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">NexaPanel</h1>
+                <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Remote PWA Mode</p>
+            </div>
+        </div>
+        <nav class="hide-scroll flex-1 p-3 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto items-center md:items-stretch">
+            <button onclick="switchView('dashboard')" data-tab="dashboard" class="nav-btn active shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 md:w-full whitespace-nowrap">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z"></path></svg>
+                <span>Console Console</span>
+            </button>
+            <button onclick="switchView('players')" data-tab="players" class="nav-btn shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 md:w-full whitespace-nowrap">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span>Players & Access</span>
+            </button>
+            <button onclick="switchView('options')" data-tab="options" class="nav-btn shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 md:w-full whitespace-nowrap">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span>Game Settings</span>
+            </button>
+            <button onclick="switchView('backups')" data-tab="backups" class="nav-btn shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 md:w-full whitespace-nowrap">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                <span>Backups Manager</span>
+            </button>
+        </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 relative h-full">
+        <!-- Global Action Header bar -->
+        <header class="bg-slate-900/60 backdrop-blur-md border-b border-slate-800 px-4 md:px-6 py-4 flex justify-between items-center shrink-0 z-10">
+            <div class="flex items-center gap-4">
+                <div id="statusIndicator" class="flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-3 py-1.5 rounded-full shrink-0">
+                    <span id="statusNode" class="h-2 w-2 rounded-full bg-red-500 shrink-0"></span>
+                    <span id="statusString" class="text-[11px] md:text-xs font-bold text-red-400 uppercase tracking-wide">Disconnected</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 md:gap-3 shrink-0">
+                <button id="startBtn" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] md:text-sm px-3 md:px-4 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-1.5 shrink-0 opacity-50 cursor-not-allowed" disabled>
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4.516 7.548c0-.443.36-.802.802-.802h9.364c.443 0 .803.359.803.802v4.904c0 .443-.36.802-.803.802H5.318a.802.802 0 01-.802-.802V7.548z"></path><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                    Start
+                </button>
+                <button id="stopBtn" class="bg-slate-800 hover:bg-red-500 hover:text-white border border-slate-700 text-slate-300 font-bold text-[11px] md:text-sm px-3 md:px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0 opacity-50 cursor-not-allowed" disabled>
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
+                    Stop
+                </button>
+                <!-- Disconnect Button to clear tunnel -->
+                <button onclick="clearSavedUrl()" class="bg-slate-900 border border-slate-700 text-slate-400 hover:text-white px-3 py-2 rounded-xl transition-all flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-hidden relative">
+            <!-- VIEW: DASHBOARD / CONSOLE -->
+            <section id="view-dashboard" class="view-panel active absolute inset-0 flex-col p-4 md:p-6 overflow-y-auto pb-24 md:pb-6 gap-6">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 shrink-0">
+                    <div class="bg-slate-900 border border-slate-800 p-3 md:p-4 rounded-xl flex flex-col justify-center">
+                        <p class="text-[10px] md:text-xs text-slate-500 font-medium uppercase tracking-wider">Engine State</p>
+                        <p id="cardStatus" class="text-sm md:text-lg font-bold text-red-400 mt-1 truncate">Halted</p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 md:p-4 rounded-xl flex flex-col justify-center">
+                        <p class="text-[10px] md:text-xs text-slate-500 font-medium uppercase tracking-wider">Connection</p>
+                        <p id="cardConn" class="text-sm md:text-lg font-bold text-amber-400 mt-1 font-mono truncate text-xs">Waiting for Link</p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 md:p-4 rounded-xl flex flex-col justify-center">
+                        <p class="text-[10px] md:text-xs text-slate-500 font-medium uppercase tracking-wider">Players Online</p>
+                        <p class="text-sm md:text-lg font-bold text-emerald-400 mt-1 font-mono truncate">0 / 20</p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 md:p-4 rounded-xl flex flex-col justify-center">
+                        <p class="text-[10px] md:text-xs text-slate-500 font-medium uppercase tracking-wider">Remote PWA</p>
+                        <p class="text-sm md:text-lg font-bold text-cyan-400 mt-1 font-mono truncate">Active</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-slate-950 rounded-2xl border border-slate-800 flex flex-col shadow-2xl shrink-0 min-h-[400px] md:h-[500px]">
+                    <div class="bg-slate-900 px-4 py-3 border-b border-slate-800/80 flex justify-between items-center shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-slate-700"></span>
+                            <h3 class="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">live_server_log</h3>
+                        </div>
+                        <button onclick="document.getElementById('terminal').innerHTML=''" class="text-[10px] md:text-xs text-slate-500 hover:text-slate-300 transition">Clear Output</button>
+                    </div>
+                    <div id="terminal" class="flex-1 p-3 md:p-4 overflow-y-auto font-mono text-[11px] md:text-sm space-y-1.5 selection:bg-emerald-500/20 text-slate-300"></div>
+                    <div class="p-2 md:p-3 bg-slate-900/80 border-t border-slate-800/50 shrink-0">
+                        <div class="relative flex items-center">
+                            <span class="absolute left-3 text-emerald-500 font-mono font-bold select-none">></span>
+                            <input type="text" id="cmdInput" class="w-full bg-[#0a0d16] border border-slate-800 rounded-xl pl-8 md:pl-9 pr-20 md:pr-24 py-2.5 md:py-3 text-[11px] md:text-sm font-mono focus:outline-none focus:border-emerald-500 transition-all text-slate-200 placeholder-slate-700" placeholder="Console cmd..." disabled>
+                            <button id="sendBtn" class="absolute right-1.5 md:right-2 px-3 md:px-4 py-1 md:py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg font-bold text-[10px] md:text-xs uppercase tracking-wider transition-colors disabled:opacity-50" disabled>Exec</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: PLAYERS & ACCESS -->
+            <section id="view-players" class="view-panel absolute inset-0 flex-col p-4 md:p-6 overflow-y-auto pb-24 md:pb-6 gap-6">
+                <div class="border-b border-slate-800 pb-2 shrink-0">
+                    <h2 class="text-lg md:text-xl font-bold tracking-tight text-white">Player & Privilege Access</h2>
+                    <p class="text-[11px] md:text-xs text-slate-500 mt-0.5">Manage operator status, whitelists, and access bounds.</p>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 shrink-0">
+                    <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 md:p-5 flex flex-col shrink-0">
+                        <h3 class="font-bold text-xs md:text-sm text-slate-300 flex items-center gap-2 mb-4">
+                            <span class="p-1 rounded bg-amber-500/10 text-amber-400">⚡</span> Server Operators (OPs)
+                        </h3>
+                        <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                            <input type="text" id="opInput" class="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-[11px] md:text-sm focus:outline-none focus:border-amber-500 font-mono" placeholder="Gamertag username...">
+                            <button onclick="dispatchPlayerCmd('op', 'opInput')" class="bg-amber-500 hover:bg-amber-600 text-slate-950 px-4 py-2.5 rounded-xl text-[11px] md:text-xs font-bold uppercase transition shrink-0 whitespace-nowrap">Add OP</button>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 md:p-5 flex flex-col shrink-0">
+                        <h3 class="font-bold text-xs md:text-sm text-slate-300 flex items-center gap-2 mb-4">
+                            <span class="p-1 rounded bg-blue-500/10 text-blue-400">🛡️</span> Whitelist Management
+                        </h3>
+                        <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                            <input type="text" id="whiteInput" class="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-[11px] md:text-sm focus:outline-none focus:border-blue-500 font-mono" placeholder="Gamertag username...">
+                            <button onclick="dispatchPlayerCmd('allowlist add', 'whiteInput')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl text-[11px] md:text-xs font-bold uppercase transition shrink-0 whitespace-nowrap">Allow</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: GAME SETTINGS -->
+            <section id="view-options" class="view-panel absolute inset-0 flex-col p-4 md:p-6 overflow-y-auto pb-24 md:pb-6 gap-4 shrink-0">
+                <div class="border-b border-slate-800 pb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0">
+                    <div>
+                        <h2 class="text-lg md:text-xl font-bold tracking-tight text-white">Core Properties & Directives</h2>
+                        <p class="text-[11px] md:text-xs text-slate-500 mt-0.5">Control operational environments over the WAN relay.</p>
+                    </div>
+                    <button id="saveOptionsBtn" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 w-full md:w-auto px-5 py-2.5 rounded-xl text-[11px] md:text-xs font-bold uppercase transition tracking-wide shadow-md shadow-emerald-500/10 shrink-0">Save Properties</button>
+                </div>
+                <div id="settingsGrid" class="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 shrink-0 mt-2">
+                    <div class="col-span-1 md:col-span-2 space-y-3 p-2 text-slate-500 text-sm">
+                        Connect to backend tunnel to load settings...
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: BACKUPS -->
+            <section id="view-backups" class="view-panel absolute inset-0 flex-col p-4 md:p-6 overflow-y-auto pb-24 md:pb-6 gap-6">
+                <div class="border-b border-slate-800 pb-2 shrink-0">
+                    <h2 class="text-lg md:text-xl font-bold tracking-tight text-white">Backups & Cloud Synchronization</h2>
+                    <p class="text-[11px] md:text-xs text-slate-500 mt-0.5">Archive structural engine layers remotely.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 shrink-0">
+                    <div class="bg-slate-900 border border-slate-800 p-4 md:p-5 rounded-2xl lg:col-span-1 h-fit space-y-3 md:space-y-4 shrink-0">
+                        <h3 class="font-bold text-xs md:text-sm text-slate-200">Trigger Matrix</h3>
+                        <button id="bkLocal" class="w-full bg-slate-800 hover:bg-slate-700 text-[11px] md:text-sm py-3 rounded-xl border border-slate-700 font-semibold transition flex items-center justify-center gap-2">
+                            📦 Compile Local .tar.gz
+                        </button>
+                        <button id="bkCloud" class="w-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[11px] md:text-sm py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2">
+                            ☁️ Push to Linked G-Drive
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="toastContainer" class="fixed top-4 right-4 md:top-6 md:right-6 z-[100] flex flex-col gap-2 pointer-events-none w-[calc(100%-2rem)] md:w-auto items-end"></div>
+
+    <script>
+        let BACKEND_URL = localStorage.getItem('nexa_tunnel_url') || '';
+        let socket = null;
+        let configMemory = {};
+
+        const term = document.getElementById('terminal');
+        const cmd = document.getElementById('cmdInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+
+        // Check startup state
+        if (BACKEND_URL) {
+            document.getElementById('connectionModal').classList.add('hidden');
+            document.getElementById('tunnelUrlInput').value = BACKEND_URL;
+            connectToBackend(BACKEND_URL);
+        }
+
+        function initConnection() {
+            const raw = document.getElementById('tunnelUrlInput').value.trim();
+            if(!raw || !raw.startsWith('http')) return alert('Enter a valid URL starting with http/https');
+            
+            BACKEND_URL = raw.replace(/\/$/, ""); // remove trailing slash
+            localStorage.setItem('nexa_tunnel_url', BACKEND_URL);
+            
+            document.getElementById('connectionModal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('connectionModal').classList.add('hidden'), 300);
+            
+            connectToBackend(BACKEND_URL);
+        }
+
+        function clearSavedUrl() {
+            localStorage.removeItem('nexa_tunnel_url');
+            location.reload();
+        }
+
+        function connectToBackend(url) {
+            triggerToast('Connecting to remote relay...', 'success');
+            document.getElementById('cardConn').innerText = url.replace('https://', '');
+            
+            // Allow bypassing localtunnel warning page header
+            const fetchConfig = { headers: { 'Bypass-Tunnel-Reminder': 'true' } };
+
+            // Initialize Remote Socket
+            socket = io(url, { extraHeaders: { 'Bypass-Tunnel-Reminder': 'true' } });
+
+            socket.on('connect', () => {
+                triggerToast('Relay link established!', 'success');
+                cmd.disabled = false;
+                sendBtn.disabled = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = false;
+                
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                stopBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                
+                // Fetch settings once connected
+                fetch(url + '/api/settings', fetchConfig)
+                    .then(r => r.json())
+                    .then(generateInterfaceProperties)
+                    .catch(e => console.error("Could not fetch settings", e));
+            });
+
+            socket.on('disconnect', () => {
+                triggerToast('Connection lost to relay.', 'error');
+                updateStatus(false, true); // show disconnected state
+            });
+
+            socket.on('log', (msg) => {
+                term.innerHTML += \`<div class="px-1 hover:bg-slate-900/40 rounded font-mono break-all">\${colorizeEngineLog(msg)}</div>\`;
+                term.scrollTop = term.scrollHeight;
+            });
+
+            socket.on('status', (online) => updateStatus(online));
+
+            // Remote Event hooks
+            startBtn.onclick = () => socket.emit('start');
+            stopBtn.onclick = () => socket.emit('stop');
+            sendBtn.onclick = () => { if (cmd.value.trim()) { socket.emit('command', cmd.value.trim()); cmd.value = ''; } };
+            cmd.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendBtn.click(); });
+
+            document.getElementById('saveOptionsBtn').onclick = async function() {
+                triggerToast('Saving settings to remote...', 'success');
+                await fetch(url + '/api/settings', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' }, 
+                    body: JSON.stringify(configMemory) 
+                });
+                triggerToast('Remote properties updated successfully.');
+            };
+
+            document.getElementById('bkLocal').onclick = async () => { triggerToast('Triggering remote compression...'); fetch(url + '/api/backup/local', {method:'POST', headers: fetchConfig}).then(()=>triggerToast('Archive finalized on phone.')); };
+            document.getElementById('bkCloud').onclick = async () => { triggerToast('Triggering remote cloud sync...'); fetch(url + '/api/backup/cloud', {method:'POST', headers: fetchConfig}).then(()=>triggerToast('Files pushed to Drive.')); };
+        }
+
+        function updateStatus(online, isDisconnected = false) {
+            const sInd = document.getElementById('statusIndicator');
+            const sNode = document.getElementById('statusNode');
+            const sStr = document.getElementById('statusString');
+            const cStat = document.getElementById('cardStatus');
+
+            if (isDisconnected) {
+                sStr.innerText = "Disconnected"; sStr.className = "text-[11px] md:text-xs font-bold text-slate-400 uppercase tracking-wide";
+                sInd.className = "flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full shrink-0";
+                sNode.className = "h-2 w-2 shrink-0 rounded-full bg-slate-500";
+                cStat.innerText = "Offline"; cStat.className = "text-sm md:text-lg font-bold text-slate-500 mt-1 truncate";
+                return;
+            }
+
+            if (online) {
+                sStr.innerText = "Active"; sStr.className = "text-[11px] md:text-xs font-bold text-emerald-400 uppercase tracking-wide";
+                sInd.className = "flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)] shrink-0";
+                sNode.className = "h-2 w-2 shrink-0 rounded-full bg-emerald-400 animate-pulse";
+                cStat.innerText = "Running"; cStat.className = "text-sm md:text-lg font-bold text-emerald-400 mt-1 truncate";
+            } else {
+                sStr.innerText = "Halted"; sStr.className = "text-[11px] md:text-xs font-bold text-red-400 uppercase tracking-wide";
+                sInd.className = "flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-3 py-1.5 rounded-full shrink-0";
+                sNode.className = "h-2 w-2 shrink-0 rounded-full bg-red-500";
+                cStat.innerText = "Halted"; cStat.className = "text-sm md:text-lg font-bold text-red-400 mt-1 truncate";
+            }
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('text-emerald-400', 'bg-emerald-500/10', 'border', 'border-emerald-500/20');
+                b.classList.add('text-slate-400');
+            });
+            document.getElementById('view-' + viewId).classList.add('active');
+            const clickedBtn = document.querySelector(\`[data-tab="\${viewId}"]\`);
+            clickedBtn.classList.remove('text-slate-400');
+            clickedBtn.classList.add('text-emerald-400', 'bg-emerald-500/10', 'border', 'border-emerald-500/20');
+        }
+
+        function triggerToast(txt, mode = 'success') {
+            const toast = document.createElement('div');
+            const clrs = mode === 'success' ? 'bg-emerald-950/95 border-emerald-500/40 text-emerald-400' : 'bg-red-950/95 border-red-500/40 text-red-400';
+            toast.className = \`flex items-center gap-2.5 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-xl border shadow-2xl backdrop-blur-md text-[11px] md:text-sm font-medium transition-all duration-300 transform translate-x-12 opacity-0 max-w-full md:max-w-md pointer-events-auto \${clrs}\`;
+            toast.innerHTML = \`<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-current"></span><span class="break-words">\${txt}</span>\`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => { toast.classList.remove('translate-x-12', 'opacity-0'); }, 50);
+            setTimeout(() => {
+                toast.classList.add('translate-x-12', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function colorizeEngineLog(raw) {
+            let escaped = raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            if (escaped.includes('[INFO]')) escaped = escaped.replace('[INFO]', '<span class="text-cyan-400 font-bold">[INFO]</span>');
+            if (escaped.includes('[WARN]')) escaped = escaped.replace('[WARN]', '<span class="text-amber-500 font-bold">[WARN]</span>');
+            if (escaped.includes('ERROR') || escaped.includes('Failed')) escaped = \`<span class="text-red-400">\${escaped}</span>\`;
+            return escaped;
+        }
+
+        function generateInterfaceProperties(props) {
+            configMemory = props;
+            settingsGrid.innerHTML = '';
+            for (const [key, value] of Object.entries(props)) {
+                const card = document.createElement('div');
+                card.className = "bg-slate-950/50 p-3 md:p-4 rounded-xl border border-slate-800/60 w-full flex flex-col justify-between gap-2 md:gap-3 shrink-0";
+                const prettyLabel = key.replace(/-/g, ' ').replace(/_/g, ' ').toUpperCase();
+                
+                let inputElement = '';
+                if (value === 'true' || value === 'false') {
+                    const acts = value === 'true' ? 'checked' : '';
+                    inputElement = \`
+                        <div class="flex items-center justify-between w-full">
+                            <span class="text-[10px] md:text-xs font-semibold text-slate-400 tracking-wide font-mono truncate mr-2">\${key}</span>
+                            <input type="checkbox" id="cfg_\${key}" class="w-4 h-4 md:w-5 md:h-5 shrink-0 accent-emerald-400 rounded cursor-pointer" \${acts} onchange="configMemory['\${key}']=this.checked?'true':'false'">
+                        </div>\`;
+                    card.innerHTML = \`<p class="text-[11px] md:text-xs font-bold text-slate-300 truncate">\${prettyLabel}</p>\${inputElement}\`;
+                } else {
+                    inputElement = \`<input type="text" value="\${value}" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 md:px-3 py-1.5 md:py-2 text-[11px] md:text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500/50 transition-colors" onchange="configMemory['\${key}']=this.value">\`;
+                    card.innerHTML = \`
+                        <div class="w-full overflow-hidden">
+                            <p class="text-[11px] md:text-xs font-bold text-slate-300 truncate">\${prettyLabel}</p>
+                            <span class="text-[9px] md:text-[10px] text-slate-600 font-mono block mb-1 md:mb-1.5 truncate">\${key}</span>
+                        </div>
+                        \${inputElement}\`;
+                }
+                settingsGrid.appendChild(card);
+            }
+        }
+
+        function dispatchPlayerCmd(action, fieldId) {
+            if(!socket) return;
+            const target = document.getElementById(fieldId);
+            if (target.value.trim()) {
+                socket.emit('command', \`\${action} \${target.value.trim()}\`);
+                triggerToast(\`Sent sequence: \${action} for player\`);
+                target.value = '';
+            }
+        }
+
+        // Setup PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => console.log('Service Worker Registered'));
+        }
+    </script>
+</body>
+</html>
