@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NexaPanel - Native Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0b0f19; font-family: system-ui, sans-serif; }
+        
+        #app-frame { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            border: none; display: none; z-index: 50; background-color: #0b0f19;
+        }
+        
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10; padding: 24px; text-align: center;
+        }
+
+        /* Emergency escape button */
+        #closeBtn {
+            display: none; position: fixed; bottom: 20px; right: 20px;
+            background: #ef4444; color: white; border: none; border-radius: 50%;
+            width: 50px; height: 50px; z-index: 100; cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); align-items: center; justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <div class="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-6">
+            <svg class="w-8 h-8 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M10 21l2-1 2 1m-2-1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg>
+        </div>
+        
+        <h1 class="text-3xl font-bold text-white mb-2 tracking-tight">System Link</h1>
+        <p class="text-sm text-slate-400 mb-8 max-w-xs">Enter the target IP address to inject the Bedrock Engine UI.</p>
+        
+        <input type="text" id="ipInput" placeholder="e.g. 192.168.1.5" 
+               class="w-full max-w-xs px-5 py-4 rounded-xl bg-slate-900 border border-slate-700 focus:outline-none focus:border-emerald-500 mb-4 text-white font-mono text-center shadow-inner">
+        
+        <button onclick="launchPanel()" class="w-full max-w-xs bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-emerald-500/20 uppercase tracking-wide text-sm">
+            Initialize Engine
+        </button>
+        
+        <button onclick="autoLocalhost()" class="mt-6 text-emerald-400 hover:text-emerald-300 transition-colors text-sm font-semibold flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            Auto-Connect (Same Device)
+        </button>
+    </div>
+
+    <iframe id="app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+
+    <button id="closeBtn" onclick="closePanel()">
+        <svg style="width:24px; height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </button>
+
+    <script>
+        const frame = document.getElementById('app-frame');
+        const ui = document.getElementById('ui-container');
+        const closeBtn = document.getElementById('closeBtn');
+        const LOCAL_PORT = 3005;
+        
+        // Load memory on boot
+        window.onload = () => {
+            const saved = localStorage.getItem('nexa_target');
+            if(saved) {
+                document.getElementById('ipInput').value = saved;
+            }
+        }
+
+        function launchPanel() {
+            let ip = document.getElementById('ipInput').value.trim();
+            if(!ip) return;
+            
+            // Clean up whatever the user typed to get the raw IP
+            ip = ip.replace('http://', '').replace('https://', '').split(':')[0];
+            localStorage.setItem('nexa_target', ip);
+            
+            // Construct the perfect URL
+            const targetUrl = 'http://' + ip + ':' + LOCAL_PORT;
+            
+            // Inject and reveal the frame
+            frame.src = targetUrl;
+            frame.style.display = 'block';
+            closeBtn.style.display = 'flex';
+            ui.style.display = 'none';
+        }
+
+        function autoLocalhost() {
+            // 127.0.0.1 is the universal loopback IP for the device itself
+            document.getElementById('ipInput').value = '127.0.0.1';
+            launchPanel();
+        }
+
+        function closePanel() {
+            // Kill the iframe connection and go back to setup
+            frame.src = 'about:blank';
+            frame.style.display = 'none';
+            closeBtn.style.display = 'none';
+            ui.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
